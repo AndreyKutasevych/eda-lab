@@ -132,6 +132,38 @@ export class EDAAppStack extends cdk.Stack {
       })
     );
 
+        const addMetadataFn = new lambdanode.NodejsFunction(
+      this,
+      "addMetadataFn",
+      {
+        runtime: lambda.Runtime.NODEJS_22_X,
+        entry: `${__dirname}/../lambdas/addImageMetadata.ts`,
+        timeout: cdk.Duration.seconds(15),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: imagesTable.tableName,
+        },
+      }
+    );
+
+    imagesTable.grantReadWriteData(addMetadataFn);
+
+    newImageTopic.addSubscription(
+      new subs.LambdaSubscription(addMetadataFn, {
+        filterPolicy: {
+          metadata_type: sns.SubscriptionFilter.stringFilter({
+            allowlist: ["Caption", "Date", "Photographer"],
+          }),
+        },
+      })
+    );
+
+
+    new cdk.CfnOutput(this, "SNS Topic ARN", {
+      value: newImageTopic.topicArn,
+    });
+
+
 
     const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {
       batchSize: 5,
