@@ -88,6 +88,8 @@ export class EDAAppStack extends cdk.Stack {
       maxBatchingWindow: cdk.Duration.seconds(10),
     });
 
+    
+
     rejectedFileFn.addEventSource(rejectedFileEventSource);
 
     const newImageTopic = new sns.Topic(this, "NewImageTopic", {
@@ -131,10 +133,12 @@ export class EDAAppStack extends cdk.Stack {
     );
 
 
-    const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {  // Changed
+    const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {
       batchSize: 5,
       maxBatchingWindow: cdk.Duration.seconds(5),
+      reportBatchItemFailures: true,  // NEW
     });
+
 
     persistImageDataFn.addEventSource(newImageEventSource);  // Changed
      // Changed
@@ -148,6 +152,8 @@ export class EDAAppStack extends cdk.Stack {
     imagesBucket.grantRead(persistImageDataFn); 
     
     imagesTable.grantReadWriteData(persistImageDataFn);
+
+    
 
   }
   
