@@ -57,10 +57,41 @@ export class EDAAppStack extends cdk.Stack {
       displayName: "New Image topic",
     });
 
+    const mailerQ = new sqs.Queue(this, "mailer-q", {
+      receiveMessageWaitTime: cdk.Duration.seconds(6),
+    });
+
     newImageTopic.addSubscription(
       new subs.SqsSubscription(imageProcessQueue)
     );
 
+    const mailerFn = new lambdanode.NodejsFunction(this, "mailer", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(3),
+      entry: `./lambdas/mailer.ts`,
+    });
+
+    newImageTopic.addSubscription(new subs.SqsSubscription(mailerQ));
+
+        const newImageMailEventSource = new events.SqsEventSource(mailerQ, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(5),
+    });
+
+    mailerFn.addEventSource(newImageMailEventSource);
+
+    mailerFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+          "ses:SendTemplatedEmail",
+        ],
+        resources: ["*"],
+      })
+    );
 
 
     const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {  // Changed
