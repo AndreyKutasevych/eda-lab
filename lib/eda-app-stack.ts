@@ -45,18 +45,35 @@ export class EDAAppStack extends cdk.Stack {
     );
 
     // S3 --> SQS
-    imagesBucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED,
-      new s3n.SqsDestination(queue)
-    );
+    
 
     // SQS --> Lambda
-    const newImageEventSource = new events.SqsEventSource(queue, {
+
+    const imageProcessQueue = new sqs.Queue(this, "img-process-q", {
+      receiveMessageWaitTime: cdk.Duration.seconds(6),
+    });
+    
+    const newImageTopic = new sns.Topic(this, "NewImageTopic", {
+      displayName: "New Image topic",
+    });
+
+    newImageTopic.addSubscription(
+      new subs.SqsSubscription(imageProcessQueue)
+    );
+
+
+
+    const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {  // Changed
       batchSize: 5,
       maxBatchingWindow: cdk.Duration.seconds(5),
     });
 
     processImageFn.addEventSource(newImageEventSource);
+
+    imagesBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.SnsDestination(newImageTopic)
+    );
 
     // Permissions
 
