@@ -8,6 +8,8 @@ import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+
 
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -22,6 +24,14 @@ export class EDAAppStack extends cdk.Stack {
       publicReadAccess: false,
     });
 
+    const imagesTable = new dynamodb.Table(this, "ImagesTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "name", type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "Images",
+    });
+
+
     // Output
     
     new cdk.CfnOutput(this, "bucketName", {
@@ -33,16 +43,22 @@ export class EDAAppStack extends cdk.Stack {
 
     // Lambda functions
 
-    const processImageFn = new lambdanode.NodejsFunction(
+        const persistImageDataFn = new lambdanode.NodejsFunction(
       this,
-      "ProcessImage",
+      "PersistImageDataFn",
       {
         runtime: lambda.Runtime.NODEJS_22_X,
-        entry: `./lambdas/processImage.ts`,
+        entry: `./lambdas/persistImageData.ts`,
         timeout: cdk.Duration.seconds(15),
         memorySize: 128,
+        environment: {
+          TABLE_NAME: imagesTable.tableName,
+          BUCKET_NAME: imagesBucket.bucketName,
+          REGION: 'eu-west-1'
+        },
       }
     );
+
 
     // S3 --> SQS
     
@@ -99,16 +115,19 @@ export class EDAAppStack extends cdk.Stack {
       maxBatchingWindow: cdk.Duration.seconds(5),
     });
 
-    processImageFn.addEventSource(newImageEventSource);
+    persistImageDataFn.addEventSource(newImageEventSource);  // Changed
+     // Changed
+
 
     imagesBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.SnsDestination(newImageTopic)
     );
 
-    // Permissions
+    imagesBucket.grantRead(persistImageDataFn); 
+    
+    imagesTable.grantReadWriteData(persistImageDataFn);
 
-    imagesBucket.grantRead(processImageFn);
   }
   
 }
